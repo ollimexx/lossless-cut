@@ -25,6 +25,26 @@ module.exports = (app, mainWindow, newVersion) => {
           });
         },
       },
+    {
+        label: 'Open Project',
+        accelerator: 'CmdOrCtrl+P',
+        click() {
+            dialog.showOpenDialog({ properties: ['openFile'] }, (filePaths) => {
+                mainWindow.webContents.send('project-opened', filePaths);
+            });
+        },
+      },
+    {
+        label: 'Save Project',
+        accelerator: 'CmdOrCtrl+S',
+        click() {
+            /*
+            dialog.showSaveDialog({ properties: ['saveFile'] }, (filePaths) => {
+                mainWindow.webContents.send('project-saved', filePaths);
+            });*/
+            mainWindow.webContents.send('project-saved', "");
+        },
+    },
       {
         label: 'Convert to friendly format (fast)',
         click() {

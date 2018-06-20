@@ -23,7 +23,10 @@
     "gifify": "gifify -p 405:299 -r 5@3 Untitled.mov-00.00.00.971-00.00.19.780.mp4",
     "lint": "eslint --ext .jsx --ext .js .",
     "clean": "rm -rf dist ffmpeg-tmp/extracted ffmpeg-tmp/binaries package",
-    "clean-ffmpeg": "rm -rf ffmpeg-tmp/archives"
+    "clean-ffmpeg": "rm -rf ffmpeg-tmp/archives",
+  	"prepackage-win": "(IF EXIST package\\LosslessCut-win32-x64 rd /s /q package\\LosslessCut-win32-x64) && xcopy ffmpeg dist\\ffmpeg /i /e /y && xcopy node_modules dist\\node_modules /i /e /y",
+    "package-win": "electron-packager dist LosslessCut --out=package --asar.unpackDir=ffmpeg --overwrite --platform=win32 --arch=x64 --icon=icon-dist/app.ico --app-copyright='Copyright' --win32metadata.CompanyName=mifi --win32metadata.FileDescription=LosslessCut --win32metadata.OriginalFilename=LosslessCut.exe --win32metadata.ProductName=LosslessCut --win32metadata.InternalName=LosslessCut",
+ 	"build-win": "(IF EXIST \"dist\" rd /s /q dist && mkdir dist) && babel src -d dist --copy-files && copy \"package.json\" \"dist/package.json\""
   },
   "author": {
     "name": "Mikael Finstad",

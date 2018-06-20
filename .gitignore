@@ -5,3 +5,5 @@ dist
 package
 ffmpeg-tmp
 icon-dist
+helpers.txt
+/.vs/lossless-cut/v15/.suo

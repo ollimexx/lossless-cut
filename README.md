@@ -1,3 +1,9 @@
+# LosslessCut 🎥 Small Sequencer
+this is a fork of [LosslessCut](https://github.com/mifi/lossless-cut)
+which adds a small sequencer to add marked scenes to.
+the scenes can be drag and dropped to change their chronology, deleted and
+a lossless film of the sequenced scenes can be exported.
+
 # LosslessCut 🎥 [![Travis](https://img.shields.io/travis/mifi/lossless-cut.svg)]()
 
 Simple, cross platform tool for lossless trimming/cutting of video and audio files. Great for rough processing of large video files taken from a video camera, GoPro, drone, etc. It lets you quickly extract the good parts from your videos and discard GBs of data without losing quality. It doesn't do any decoding / encoding and is therefore extremely fast. This app uses the awesome ffmpeg (included) for doing the grunt work.

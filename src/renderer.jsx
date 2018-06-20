@@ -15,6 +15,10 @@ const util = require('./util');
 
 const dialog = electron.remote.dialog;
 
+import Sequencer from "./Sequencer";
+
+
+
 function setFileNameTitle(filePath) {
   const appName = 'LosslessCut';
   document.title = filePath ? `${appName} - ${path.basename(filePath)}` : 'appName';
@@ -78,6 +82,18 @@ function withBlur(cb) {
   };
 }
 
+function getSnapshot() {
+    var video = getVideo();
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    canvas.getContext('2d').drawImage(video, 0, 0);
+
+    const data = canvas.toDataURL(`image/png`);
+    return data;
+}
+
 class App extends React.Component {
   constructor(props) {
     super(props);
@@ -99,6 +115,9 @@ class App extends React.Component {
       cutProgress: undefined,
       includeAllStreams: false,
       stripAudio: false,
+      scenes: [],
+      selectedKey: -1,
+      updateSceneEnabled: false
     };
 
     this.state = _.cloneDeep(defaultState);
@@ -106,9 +125,15 @@ class App extends React.Component {
     const resetState = () => {
       const video = getVideo();
       video.currentTime = 0;
-      video.playbackRate = 1;
+      //video.playbackRate = 1;
       this.setState(defaultState);
     };
+
+      this.deleteScene = this.deleteScene.bind(this);
+      this.onSceneDoubleClick = this.onSceneDoubleClick.bind(this);
+      this.onSceneDrop = this.onSceneDrop.bind(this);
+      this.randomScenes = this.randomScenes.bind(this);
+      this.updateScene = this.updateScene.bind(this);
 
     const load = (filePath, html5FriendlyPath) => {
       console.log('Load', { filePath, html5FriendlyPath });
@@ -134,12 +159,45 @@ class App extends React.Component {
           ffmpeg.showFfmpegFail(err);
         })
         .finally(() => this.setState({ working: false }));
-    };
+      };
+
+
+      const saveProject = () => {
+          var filePath = this.state.filePath + '.prj';
+          fs.writeFile(filePath, JSON.stringify(this.state.scenes), 'utf-8', function (err) {
+              if (err) throw err
+              console.log('project file written')
+          });
+      };
+    
+      const loadProject = (filePath) => {
+          var videoPath = filePath.substring(0, filePath.length - 4);
+          load(videoPath);
+
+          fs.readFile(filePath, 'utf-8',  (err, data) => {
+              if (err) throw err
+
+              var scenes = JSON.parse(data);
+              this.setState({ scenes: scenes });
+          });
+      }
 
     electron.ipcRenderer.on('file-opened', (event, filePaths) => {
       if (!filePaths || filePaths.length !== 1) return;
       load(filePaths[0]);
+      });
+
+    electron.ipcRenderer.on('project-opened', (event, filePaths) => {
+        if (!filePaths || filePaths.length !== 1) return;
+        loadProject(filePaths[0]);
     });
+
+    electron.ipcRenderer.on('project-saved', (event, filePaths) => {
+        //if (!filePaths || filePaths.length !== 1) return;
+        //saveProject(filePaths[0]);
+        saveProject("");
+    });
+
 
     electron.ipcRenderer.on('html5ify', async (event, encodeVideo) => {
       const { filePath, customOutDir } = this.state;
@@ -172,6 +230,8 @@ class App extends React.Component {
     Mousetrap.bind('l', () => this.changePlaybackRate(1));
     Mousetrap.bind('left', () => seekRel(-1));
     Mousetrap.bind('right', () => seekRel(1));
+    Mousetrap.bind('up', () => seekRel(-5));
+    Mousetrap.bind('down', () => seekRel(5));
     Mousetrap.bind('.', () => shortStep(1));
     Mousetrap.bind(',', () => shortStep(-1));
     Mousetrap.bind('c', () => this.capture());
@@ -179,16 +239,186 @@ class App extends React.Component {
     Mousetrap.bind('i', () => this.setCutStart());
     Mousetrap.bind('o', () => this.setCutEnd());
     Mousetrap.bind('h', () => this.toggleHelp());
+    Mousetrap.bind('a', () => this.onAddScene());
 
     electron.ipcRenderer.send('renderer-ready');
   }
 
+    onAddScene() {
+        if (!this.areCutTimesSet()) {
+            return alert('Please select both start and end time');
+        }
+        if (!this.isCutRangeValid()) {
+            return alert('Start time must be before end time');
+        }
+
+        var video = getVideo();
+        var previousTime = video.currentTime;
+        console.log(previousTime);
+        video.onseeked = () => {
+            var video = getVideo();
+            video.onseeked = null;
+    
+            const data = getSnapshot();
+            //seekAbs(time);
+            var theKey = Date.now();
+            this.setState({
+                scenes: [...this.state.scenes, { left: this.state.cutStartTime, right: this.state.cutEndTime, dataUri: data, key: theKey }]
+            })
+
+            this.setState({ selectedKey: theKey, updateSceneEnabled: true });
+
+            seekAbs(previousTime);
+           
+            var seq = document.getElementById("seq");
+            seq.scrollLeft = seq.scrollWidth + 50;
+        }
+        seekAbs(this.state.cutStartTime);
+    }
+
+
+    updateScene() {
+        if (this.state.selectedKey == -1) {
+            return;
+        }
+        if (!this.areCutTimesSet()) {
+            return alert('Please select both start and end time');
+        }
+        if (!this.isCutRangeValid()) {
+            return alert('Start time must be before end time');
+        }
+        var self = this;
+        var item = this.state.scenes.filter(function (item) {
+            return (item.key == self.state.selectedKey);
+        })[0];
+        console.log(this.state.cutStartTime);
+        console.log(item.left);
+        if (this.state.cutStartTime == item.left) {
+            item.right = this.state.cutEndTime;
+            console.log("only right");
+            return;
+        }
+
+        var video = getVideo();
+        video.onseeked = function () {
+
+            video.onseeked = null;
+
+            item.dataUri = getSnapshot();
+            item.left = self.state.cutStartTime;
+            item.right = self.state.cutEndTime;
+
+            var updatedScenes = self.state.scenes.slice();
+            self.setState({ scenes: updatedScenes });
+        }
+        seekAbs(this.state.cutStartTime);
+    }
+
+
+    deleteScene(key) {
+        var filteredItems = this.state.scenes.filter(function (item) {
+            return (item.key !== key);
+        });
+
+        this.setState({
+            scenes: filteredItems,
+            selectedKey: -1,
+            updateSceneEnabled: false
+        });
+        //console.log(this.state.scenes);
+    }
+
+
+    onSceneDoubleClick(key) {
+        var items = this.state.scenes.filter(function (item) {
+            return (item.key == key);
+        });
+
+        console.log(items[0].right);
+
+        seekAbs(items[0].left);
+        this.setState({
+            cutStartTime: items[0].left,
+            cutEndTime: items[0].right,
+            currentTime: items[0].left,  
+            selectedKey: items[0].key,
+            updateSceneEnabled: true
+        });
+        //this.jumpCutStart();
+    }
+
+
+    onSceneDrop(key, beforeKey) {
+        // get dropped item
+        var droppedItems = this.state.scenes.filter(function (item) {
+            return (item.key == key);
+        });
+        var droppedItem = droppedItems[0];
+        // delete source item
+        var filteredItems = this.state.scenes.filter(function (item) {
+            return (item.key !== key);
+        });
+        
+        if (beforeKey != -1) {
+            var insertIdx = filteredItems.map(function (item) { return item.key; }).indexOf(beforeKey);
+            filteredItems.splice(insertIdx, 0, droppedItem);
+        }
+        else {
+            filteredItems.push(droppedItem);
+        }
+        this.setState({
+            scenes: filteredItems,
+            selectedKey: -1
+        });
+    }
+
+
+    randomScenes() {
+        var video = getVideo();
+        var dur = this.state.duration;
+
+        var scenes = [];
+
+        var i = 0;
+                
+        var self = this;
+
+        var rTime = Math.random() * dur;
+        var rTime2 = rTime + ((dur - rTime) * Math.random());
+
+        video.onseeked = function () {
+
+            const data = getSnapshot();
+
+            var theKey = Date.now();
+            scenes.push({ left: rTime, right: rTime2, dataUri: data, key: theKey });
+
+            i++;
+            if (i > 10) {
+                self.setState({
+                    scenes: scenes,
+                    selectedKey: -1
+                });
+                video.onseeked = null;
+                return;
+            }
+
+            rTime = Math.random() * dur;
+            rTime2 = rTime + ((dur - rTime) * Math.random());
+            
+            seekAbs(rTime);
+        }
+
+        seekAbs(rTime);                   
+    }
+
+
   onPlay(playing) {
     this.setState({ playing });
 
-    if (!playing) {
-      getVideo().playbackRate = 1;
-    }
+    //if (!playing) {
+      //getVideo().playbackRate = 1;
+    //}
   }
 
   onDurationChange(duration) {
@@ -238,7 +468,7 @@ class App extends React.Component {
   }
 
   areCutTimesSet() {
-    return (this.state.cutStartTime !== undefined || this.state.cutEndTime !== undefined);
+    return (this.state.cutStartTime !== undefined && this.state.cutEndTime !== undefined);
   }
 
   isCutRangeValid() {
@@ -280,13 +510,13 @@ class App extends React.Component {
 
   changePlaybackRate(dir) {
     const video = getVideo();
-    if (!this.state.playing) {
-      video.playbackRate = 0.5; // dir * 0.5;
-      video.play();
-    } else {
+    //if (!this.state.playing) {
+    //  video.playbackRate = 0.5; // dir * 0.5;
+    //  video.play();
+    //} else {
       const newRate = video.playbackRate + (dir * 0.15);
       video.playbackRate = _.clamp(newRate, 0.05, 16);
-    }
+    //}
   }
 
   playbackRateChange() {
@@ -305,6 +535,59 @@ class App extends React.Component {
     });
   }
 
+    async extractAudioClick() {
+
+      if (this.state.working) return alert('I\'m busy');
+
+      this.setState({ working: true });
+      try {
+          return await ffmpeg.extractAudio(
+              this.state.filePath,             
+              this.state.duration,      
+              progress => this.onCutProgress(progress)
+          );
+      } catch (err) {
+          console.error('stdout:', err.stdout);
+          console.error('stderr:', err.stderr);
+
+          if (err.code === 1 || err.code === 'ENOENT') {
+              return alert('Whoops! ffmpeg was unable to cut this video. It may be of an unknown format or codec combination');
+          }
+          return ffmpeg.showFfmpegFail(err);
+      } finally {
+          this.setState({ working: false });
+      }
+  
+  }   
+
+
+  async mergeClick() {
+      if (this.state.working) return alert('I\'m busy');
+
+      this.setState({ working: true });
+      try {
+          return await ffmpeg.merge({
+              customOutDir: this.state.customOutDir,
+              filePath: this.state.filePath,
+              format: this.state.fileFormat,
+              scenes: this.state.scenes,
+              videoDuration: this.state.duration,      
+              onProgress: progress => this.onCutProgress(progress),
+          });
+      } catch (err) {
+          console.error('stdout:', err.stdout);
+          console.error('stderr:', err.stderr);
+
+          if (err.code === 1 || err.code === 'ENOENT') {
+              return alert('Whoops! ffmpeg was unable to cut this video. It may be of an unknown format or codec combination');
+          }
+          return ffmpeg.showFfmpegFail(err);
+      } finally {
+          this.setState({ working: false });
+      }
+  
+  }   
+ 
   async cutClick() {
     if (this.state.working) return alert('I\'m busy');
 
@@ -326,6 +609,9 @@ class App extends React.Component {
     }
 
     this.setState({ working: true });
+
+    var ref = { outPath: "" };
+
     try {
       return await ffmpeg.cut({
         customOutDir: outputDir,
@@ -338,7 +624,7 @@ class App extends React.Component {
         includeAllStreams,
         stripAudio,
         onProgress: progress => this.onCutProgress(progress),
-      });
+      }, ref);
     } catch (err) {
       console.error('stdout:', err.stdout);
       console.error('stderr:', err.stderr);
@@ -403,14 +689,18 @@ class App extends React.Component {
 
   render() {
     const jumpCutButtonStyle = { position: 'absolute', color: 'black', bottom: 0, top: 0, padding: '2px 8px' };
+      var updateSceneClass = "button fa fa-cart-arrow-down grayout";
+      if (this.state.updateSceneEnabled) {
+          updateSceneClass = "button fa fa-cart-arrow-down";
+      }
 
     return (<div>
       {!this.state.filePath && <div id="drag-drop-field">DROP VIDEO</div>}
       {this.state.working && (
-        <div style={{ color: 'white', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '.5em', margin: '1em', padding: '.2em .5em', position: 'absolute', zIndex: 1, top: 0, left: 0 }}>
-          <i className="fa fa-cog fa-spin fa-3x fa-fw" style={{ verticalAlign: 'middle', width: '1em', height: '1em' }} />
+        <div id="working">
+          <i className="fa fa-cog fa-spin fa-3x fa-fw" style={{ verticalAlign: 'middle' }} />
           {this.state.cutProgress != null &&
-            <span style={{ color: 'rgba(255, 255, 255, 0.7)', paddingLeft: '.4em' }}>
+            <span style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
               {Math.floor(this.state.cutProgress * 100)} %
             </span>
           }
@@ -426,7 +716,11 @@ class App extends React.Component {
           onDurationChange={e => this.onDurationChange(e.target.duration)}
           onTimeUpdate={e => this.setState({ currentTime: e.target.currentTime })}
         />
-      </div>
+        </div>
+
+           
+        <Sequencer onRef={ref => (this.sequencer = ref)} entries={this.state.scenes} selectedKey={this.state.selectedKey}
+            delete={this.deleteScene} onDoubleClick={this.onSceneDoubleClick} onDrop={this.onSceneDrop}/>
 
       <div className="controls-wrapper">
         <Hammer
@@ -520,7 +814,20 @@ class App extends React.Component {
             className="button fa fa-scissors"
             aria-hidden="true"
             onClick={() => this.cutClick()}
-          />
+                />
+            <i
+                title="to scenes"
+                className="button fa fa-cart-plus"
+                aria-hidden="true"
+                onClick={() => this.onAddScene()}
+                />
+            <i
+                title="update selected scene"
+                    className={updateSceneClass}
+                aria-hidden="true"
+                onClick={() => this.updateScene()}
+            />
+                
           <i
             title="Set cut end to current position"
             className="button fa fa-angle-right"
@@ -538,6 +845,25 @@ class App extends React.Component {
         <button className="playback-rate" title="Playback rate">
           {_.round(this.state.playbackRate, 1) || 1}x
         </button>
+            
+            <i
+                title="export"
+                className="button fa fa-film"
+                aria-hidden="true"
+                onClick={() => this.mergeClick()}
+            />
+            <i
+                title="extract audio"
+                className="button fa fa-headphones"
+                aria-hidden="true"
+                onClick={() => this.extractAudioClick()}
+            />
+            <i
+                title="random"
+                className="button fa fa-paper-plane"
+                aria-hidden="true"
+                onClick={() => this.randomScenes()}
+            />
       </div>
 
       <div className="right-menu">

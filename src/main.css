@@ -25,7 +25,7 @@ input, button, textarea, :focus {
   top: 0;
   left: 0;
   right: 0;
-  bottom: 6rem;
+  bottom: 9.5rem;
 }
 
 #player video {
@@ -72,6 +72,33 @@ input, button, textarea, :focus {
   padding: .3em;
 }
 
+.sequencer{
+    position: absolute;
+    left: 0;
+    right:0;
+    bottom: 6rem;
+    height: 3.5rem;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    border: 1px solid blue;
+    /*scrollbar-base-color:#ffeaff;*/
+}
+
+.sequencerimg{
+    
+    height:1.9rem;
+    margin-right: 7px;
+    border:1px solid lightgrey; 
+}
+
+.grayout {
+    opacity: 0.6; /* Real browsers */
+    filter: alpha(opacity = 60); /* MSIE */
+}
+
 .controls-wrapper {
   position: absolute;
   left: 0;
@@ -110,6 +137,18 @@ input, button, textarea, :focus {
   border-left: 1px solid black;
   border-right: 1px solid black;
   z-index: 1;
+}
+
+#working {
+  color: white;
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+}
+
+#working i {
+  padding: .3em;
 }
 
 #drag-drop-field {

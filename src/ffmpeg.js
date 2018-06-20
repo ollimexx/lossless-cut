@@ -28,7 +28,13 @@ function canExecuteFfmpeg(ffmpegPath) {
 }
 
 function getFfmpegPath() {
+    // dirname in production:
+  // D:\data\vs\lossless-cut\package\LosslessCut-win32-x64\resources\app.asar
+    // dirname in dev
+  // D:\data\vs\lossless-cut\dist
   const internalFfmpeg = path.join(__dirname, '..', 'app.asar.unpacked', 'ffmpeg', getWithExt('ffmpeg'));
+    console.log('__dirname:');
+    console.log(__dirname);
   return canExecuteFfmpeg(internalFfmpeg)
     .then(() => internalFfmpeg)
     .catch(() => {
@@ -55,14 +61,87 @@ function handleProgress(process, cutDuration, onProgress) {
   });
 }
 
+function handleProgressExtractAudio(process, cutDuration, onProgress) {
+  const rl = readline.createInterface({ input: process.stderr });
+  rl.on('line', (line) => {
+    try {
+      const match = line.match(/(?:size|Lsize)=\s*[^\s]+\s+time=\s*([^\s]+)\s+/); // eslint-disable-line max-len
+      if (!match) return;
+
+      const str = match[1];
+      console.log(str);
+      const progressTime = moment.duration(str).asSeconds();
+      console.log(progressTime);
+      onProgress(progressTime / cutDuration);
+    } catch (err) {
+      console.log('Failed to parse ffmpeg progress line', err);
+    }
+  });
+}
+
+async function extractAudio( filePath,  duration,   onProgress){
+    var outPath = path.dirname(filePath) + '\\' +  path.parse(filePath).name + '.wav' ;
+
+    var args = ['-i', filePath, outPath];
+    const ffmpegPath = await getFfmpegPath();
+    const process = execa(ffmpegPath, args);
+    // size=  972876kB time=01:26:28.67 bitrate=1536.0kbits/s speed= 687x
+    handleProgressExtractAudio(process, duration, onProgress);
+    const result = await process;
+    console.log(result.stdout);
+}
+
+async function merge({
+    customOutDir, filePath, format, scenes, videoDuration, onProgress,
+}) {
+    onProgress(0);
+
+    console.log('merge ' + filePath);
+    // write filelist file
+    var fileListPath = path.dirname(filePath) + "\\filelist.txt";
+
+    if (fs.existsSync(fileListPath)) {
+        fs.unlinkSync(fileListPath, (err) => {
+            if (err) throw err;
+            console.log(fileListPath + ' was deleted');
+        });
+    }
+    var stream = fs.createWriteStream(fileListPath, { flags: 'a', mode: 0o777 });
+
+    var ref = { outPath: "" };
+    onProgress(2 / (scenes.length + 2));
+
+    for (var i = 0; i < scenes.length; i++) {
+        var scene = scenes[i];
+        var ret= await cut({
+            customOutDir, filePath, format, cutFrom: scene.left, cutTo:scene.right, videoDuration,
+            rotation: undefined, includeAllStreams: false, onProgress: function (p) { }
+        }, ref);
+        stream.write(`file '${ref.outPath}'\r\n`);
+
+        onProgress( (i+2) / (scenes.length + 2))
+    }
+    stream.end();
+    var mergeFilePath = path.dirname(filePath) + '\\' +  path.parse(filePath).name + '_cut' + path.parse(filePath).ext;
+
+    var args = ['-f', 'concat', '-safe', '0', '-i', fileListPath, '-c', 'copy', mergeFilePath];
+    const ffmpegPath = await getFfmpegPath();
+    const process = execa(ffmpegPath, args);
+    const result = await process;
+    console.log(result.stdout);
+    //onProgress(i / scenes.length);
+}
+
+
 async function cut({
   customOutDir, filePath, format, cutFrom, cutTo, videoDuration, rotation, includeAllStreams,
   onProgress, stripAudio,
-}) {
+}, ref) {
   const ext = path.extname(filePath) || `.${format}`;
   const cutSpecification = `${util.formatDuration(cutFrom, true)}-${util.formatDuration(cutTo, true)}`;
 
   const outPath = util.getOutPath(customOutDir, filePath, `${cutSpecification}${ext}`);
+  ref.outPath = outPath;
 
   console.log('Cutting from', cutFrom, 'to', cutTo);
 
@@ -72,17 +151,17 @@ async function cut({
 
   const rotationArgs = rotation !== undefined ? ['-metadata:s:v:0', `rotate=${rotation}`] : [];
   const ffmpegArgs = [
-    '-i', filePath, '-y',
-    ...(stripAudio ? ['-an'] : ['-acodec', 'copy']),
-    '-vcodec', 'copy',
-    '-scodec', 'copy',
-    ...cutFromArgs, ...cutToArgs,
+     '-noaccurate_seek', ...cutFromArgs,'-i', filePath, '-y', '-vcodec', 'copy', '-acodec', 'copy', '-scodec', 'copy',
+     ...cutToArgs,
     ...(includeAllStreams ? ['-map', '0'] : []),
     '-map_metadata', '0',
     ...rotationArgs,
-    '-f', format,
+      '-f', format,
+      '-avoid_negative_ts', 'make_zero',
     outPath,
   ];
+
+  // ffmpeg -noaccurate_seek -ss 112.509469 -i D:\gladbeck.mp4 -y -vcodec copy -acodec copy -scodec copy -t 4857.761796000001 -map_metadata 0 -f mov -avoid_negative_ts make_zero D:\gladbeck.mp4-00.01.52.509-01.22.50.271.mp4
 
   console.log('ffmpeg', ffmpegArgs.join(' '));
 
@@ -90,6 +169,8 @@ async function cut({
 
   const ffmpegPath = await getFfmpegPath();
   const process = execa(ffmpegPath, ffmpegArgs);
+    // output of ffmpeg:
+    //frame=60729 fps=41117 q=-1.0 Lsize=  114178kB time=01:20:57.75 bitrate= 192.5kbits/s speed=3.29e+003x
   handleProgress(process, cutTo - cutFrom, onProgress);
   const result = await process;
   console.log(result.stdout);
@@ -141,6 +222,26 @@ function determineOutputFormat(ffprobeFormats, ft) {
   return ffprobeFormats[0] || undefined;
 }
 
+
+//ffprobe -of json -show_format -i gladbeck.mp4
+//"format": {
+//    "filename": "gladbeck.mp4",
+//    "nb_streams": 2,
+//    "nb_programs": 0,
+//    "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+//    "format_long_name": "QuickTime / MOV",
+//    "start_time": "0.000000",
+//    "duration": "5188.672000",
+//    "size": "124119994",
+//    "bit_rate": "191370",
+//    "probe_score": 100,
+//    "tags": {
+//        "major_brand": "mp42",
+//        "minor_version": "0",
+//        "compatible_brands": "isom",
+//        "creation_time": "2018-03-02T11:38:28.000000Z"
+//    }
+//}
 function getFormat(filePath) {
   return bluebird.try(() => {
     console.log('getFormat', filePath);
@@ -168,6 +269,8 @@ function getFormat(filePath) {
 }
 
 module.exports = {
+  extractAudio,
+  merge,
   cut,
   getFormat,
   showFfmpegFail,
