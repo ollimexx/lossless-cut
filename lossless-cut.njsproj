@@ -24,13 +24,13 @@
     <Content Include="helpers.txt">
       <SubType>Code</SubType>
     </Content>
-    <Content Include="screenshot sequencer.png" />
     <Content Include="screenshot.jpg" />
     <Content Include="package-lock.json" />
     <Content Include="package.json" />
     <Content Include="CHANGELOG.md" />
     <Content Include="developer-notes.md" />
     <Content Include="README.md" />
+    <Content Include="screenshot_sequencer.png" />
     <Content Include="TODO.md" />
     <Content Include="src\index.html" />
     <Content Include="src\main.css" />
