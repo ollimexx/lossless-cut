@@ -24,6 +24,7 @@
     <Content Include="helpers.txt">
       <SubType>Code</SubType>
     </Content>
+    <Content Include="screenshot sequencer.png" />
     <Content Include="screenshot.jpg" />
     <Content Include="package-lock.json" />
     <Content Include="package.json" />
