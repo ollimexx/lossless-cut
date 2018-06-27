@@ -57,6 +57,12 @@ module.exports = (app, mainWindow, newVersion) => {
           mainWindow.webContents.send('html5ify', true);
         },
       },
+      {
+        label: 'Convert with quality',
+        click() {
+          mainWindow.webContents.send('convert', true);
+        },
+      },
     ],
   });
 

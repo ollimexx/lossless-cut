@@ -15,6 +15,7 @@ const util = require('./util');
 
 const dialog = electron.remote.dialog;
 
+const fs = require('fs');
 import Sequencer from "./Sequencer";
 
 
@@ -172,7 +173,18 @@ class App extends React.Component {
     
       const loadProject = (filePath) => {
           var videoPath = filePath.substring(0, filePath.length - 4);
-          load(videoPath);
+          console.log('videoPath', videoPath);
+          if (!fs.existsSync(videoPath)) {
+              alert( 'corresponding videofile ' + videoPath + ' does not exist!');
+              return;
+          }
+          var html5ifiedPath = videoPath + '-html5ified.mp4';
+            if (fs.existsSync(html5ifiedPath)){
+                load(videoPath, html5ifiedPath);
+            }
+            else {
+                load(videoPath);
+            }          
 
           fs.readFile(filePath, 'utf-8',  (err, data) => {
               if (err) throw err
@@ -184,7 +196,14 @@ class App extends React.Component {
 
     electron.ipcRenderer.on('file-opened', (event, filePaths) => {
       if (!filePaths || filePaths.length !== 1) return;
-      load(filePaths[0]);
+      
+      var html5ifiedPath = filePaths[0] + '-html5ified.mp4';
+        if (fs.existsSync(html5ifiedPath)){
+            load(filePaths[0], html5ifiedPath);
+        }
+        else {
+            load(filePaths[0]);
+        }
       });
 
     electron.ipcRenderer.on('project-opened', (event, filePaths) => {
@@ -198,7 +217,6 @@ class App extends React.Component {
         saveProject("");
     });
 
-
     electron.ipcRenderer.on('html5ify', async (event, encodeVideo) => {
       const { filePath, customOutDir } = this.state;
       if (!filePath) return;
@@ -206,9 +224,43 @@ class App extends React.Component {
       try {
         this.setState({ working: true });
         const html5ifiedPath = util.getOutPath(customOutDir, filePath, 'html5ified.mp4');
-        await ffmpeg.html5ify(filePath, html5ifiedPath, encodeVideo);
+        ffmpeg.isCodecOk(filePath).then((isOk) => {
+                ffmpeg.getDuration(filePath).then(async (duration) => {
+                    //if (!duration) duration=1000;
+                    console.log('duration', duration);
+                    if( isOk) encodeVideo=false;
+                    await ffmpeg.html5ify(filePath, html5ifiedPath, encodeVideo, duration, progress => this.onCutProgress(progress));
+                    this.setState({ working: false });
+                    load(filePath,html5ifiedPath);
+                })
+            })
+      } catch (err) {
+        alert('Failed to html5ify file');
+        console.error('Failed to html5ify file', err);
         this.setState({ working: false });
-        load(filePath, html5ifiedPath);
+      }
+    });
+
+
+    electron.ipcRenderer.on('convert', async (event, encodeVideo) => {
+      const { filePath, customOutDir } = this.state;
+      if (!filePath) return;
+
+        try {
+            this.setState({ working: true });
+            const conversionPath = filePath + '.mp4';
+
+            ffmpeg.isCodecOk(filePath).then((isOk) => {
+                ffmpeg.getDuration(filePath).then(async (duration) => {
+                    //if (!duration) duration=1000;
+                    console.log('duration', duration);
+                    if( isOk) encodeVideo=false;
+                    await ffmpeg.convert(filePath, conversionPath, encodeVideo, duration, progress => this.onCutProgress(progress));
+                    this.setState({ working: false });
+                    load(conversionPath);
+                })
+            })
+                 
       } catch (err) {
         alert('Failed to html5ify file');
         console.error('Failed to html5ify file', err);
@@ -564,6 +616,8 @@ class App extends React.Component {
   async mergeClick() {
       if (this.state.working) return alert('I\'m busy');
 
+      const stripAudio = this.state.stripAudio;
+
       this.setState({ working: true });
       try {
           return await ffmpeg.merge({
@@ -573,6 +627,7 @@ class App extends React.Component {
               scenes: this.state.scenes,
               videoDuration: this.state.duration,      
               onProgress: progress => this.onCutProgress(progress),
+              stripAudio
           });
       } catch (err) {
           console.error('stdout:', err.stdout);
@@ -613,7 +668,7 @@ class App extends React.Component {
     var ref = { outPath: "" };
 
     try {
-      return await ffmpeg.cut({
+      return await ffmpeg.cutOnIframe({
         customOutDir: outputDir,
         filePath,
         format: fileFormat,
