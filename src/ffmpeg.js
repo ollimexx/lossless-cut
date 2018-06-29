@@ -236,14 +236,33 @@ async function cutOnIframe({
 async function html5ify(filePath, outPath, encodeVideo, duration, onProgress) {
   console.log('Making HTML5 friendly version', { filePath, outPath, encodeVideo });
 
+  // '-c:a', 'libfdk_aac' ,'-b:a 64k'
   const videoArgs = encodeVideo
     ? ['-vf', 'scale=-2:400,format=yuv420p', '-sws_flags', 'neighbor', '-vcodec', 'libx264', '-profile:v', 'baseline', '-x264opts', 'level=3.0', '-preset:v', 'ultrafast', '-crf', '28']
     : ['-vcodec', 'copy'];
 
   const ffmpegArgs = [
-    '-i', filePath, ...videoArgs, '-an',
+    '-i', filePath, ...videoArgs, 
     '-y',
     outPath,
+  ];
+
+  console.log('ffmpeg', ffmpegArgs.join(' '));
+
+  const ffmpegPath = await getFfmpegPath();
+  const process = execa(ffmpegPath, ffmpegArgs);
+  handleProgressOtherTasks(process, duration, onProgress);
+  const result = await process;
+  console.log(result.stdout);
+}
+
+async function createWaveform(filePath, duration, onProgress) {
+  console.log('create waveform', { filePath });
+
+    // ffmpeg -i VTS_01_1.VOB -ac 1 -filter:a aresample=4000 -map 0:a:2 -c:a pcm_s16le -f data test.dat
+   const ffmpegArgs = [
+    '-i', filePath, '-ac', '1',  '-filter:a', 'aresample=2000', '-map', '0:a:2', '-c:a', 
+    'pcm_s16le', '-f', 'data', filePath +'.dat', '-y'
   ];
 
   console.log('ffmpeg', ffmpegArgs.join(' '));

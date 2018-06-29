@@ -23,6 +23,9 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
   <PropertyGroup Condition="'$(Configuration)' == 'Release'" />
   <ItemGroup>
+    <Content Include="ffmpeg.txt">
+      <SubType>Code</SubType>
+    </Content>
     <Content Include="helpers.txt">
       <SubType>Code</SubType>
     </Content>

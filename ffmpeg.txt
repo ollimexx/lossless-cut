@@ -1,0 +1,32 @@
+﻿ffmpeg -i in.wav \
+-filter_complex "channelsplit=channel_layout=5.1[FL][FR][FC][LFE][BL][BR]" \
+-map "[FL]" front_left.wav \
+-map "[FR]" front_right.wav \
+-map "[FC]" front_center.wav \
+-map "[LFE]" lfe.wav \
+-map "[BL]" back_left.wav \
+-map "[BR]" back_right.wav
+
+ffmpeg -y -i "concat:VTS_01_1.VOB|VTS_01_2.VOB|VTS_01_3.VOB|VTS_01_4.VOB" -map 0:4 -c:a:0 copy out.ac3
+ffmpeg -y -i out.ac3 -filter_complex "channelsplit=channel_layout=5.1[FL][FR][FC][LFE][BL][BR]" -map "[FL]" front_left.wav -map "[FR]" front_right.wav -map "[FC]" front_center.wav -map "[LFE]" lfe.wav -map "[BL]" back_left.wav -map "[BR]" back_right.wav
+ffmpeg -y -i front_left.wav -i front_right.wav -filter_complex "[0:a][1:a]amerge=inputs=2[aout]" -map "[aout]" out_front.wav
+
+ffmpeg -y -i VTS_01_1.VOB -filter_complex "[0:a:2]channelsplit=channel_layout=5.1[FL][FR][FC][LFE][BL][BR]" -map "[FL]" front_left.wav -map "[FR]" front_right.wav -map "[FC]" front_center.wav -map "[LFE]" lfe.wav -map "[BL]" back_left.wav -map "[BR]" back_right.wav
+
+ffmpeg -y -i VTS_01_1.VOB -filter_complex "[0:a:2]channelsplit=channel_layout=5.1[FL][FR][FC][LFE][BL][BR];[FL][FR]amerge=inputs=2[front];[BL][BR]amerge=inputs=2[back]" -map "[front]" front.wav -map "[back]" back.wav -map "[FC]" front_center.wav -map "[LFE]" lfe.wav
+
+ffmpeg -y -i VTS_01_1.VOB -filter_complex "[0:a:2]channelsplit=channel_layout=5.1[FL][FR][FC][LFE][BL][BR];[FL][FR]amerge=inputs=2[front];[BL][BR]amerge=inputs=2[back];[LFE]anullsink" -map "[front]" front.wav -map "[back]" back.wav -map "[FC]" center.wav
+
+ffmpeg -y -i "concat:VTS_01_1.VOB|VTS_01_2.VOB|VTS_01_3.VOB|VTS_01_4.VOB" -map 0 out.mp4
+
+ffmpeg -i input.mp4 -filter_complex "[0:v]trim=start=0:duration=90[a];\
+[0:v]trim=start=90:duration=30,setpts=PTS-STARTPTS[b];\
+[b]hflip[c];\
+[a][c]concat[d];\
+[0:v]trim=start=120:duration=60,setpts=PTS-STARTPTS[e];\
+[d][e]concat[out1]" -map [out1] flip.mp4
+
+
+ffmpeg -i VTS_01_1.VOB -filter_complex "showwavespic=s=640x120" -frames:v 1 output.png
+
+ffmpeg -i VTS_01_1.VOB -ac 1 -filter:a aresample=4000 -map 0:a:2 -c:a pcm_s16le -f data test.dat
