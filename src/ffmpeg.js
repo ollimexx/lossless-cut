@@ -79,7 +79,9 @@ function handleProgressOtherTasks(process, cutDuration, onProgress) {
   });
 }
 
-async function extractAudio( filePath,  duration,   onProgress){
+async function extractAudio( filePath,  duration,   onProgress, selectedAudio){
+    console.log('selected', selectedAudio); // number of audio stream 0:a:n
+
     var outPath = path.dirname(filePath) + '\\' +  path.parse(filePath).name + '.wav' ;
 
     var args = ['-i', filePath, outPath];
@@ -357,6 +359,31 @@ function isCodecOk(filePath) {
   });
 }
 
+//Stream #0:0[0x1bf]: Data: dvd_nav_packet
+//Stream #0:1[0x1e0]: Video: mpeg2video (Main), yuv420p(tv, top first), 720x576 [SAR 64:45 DAR 16:9], 25 fps, 25 tbr, 90k tbn, 50 tbc
+//Stream #0:2[0x80]: Audio: ac3, 48000 Hz, stereo, fltp, 192 kb/s
+//Stream #0:3[0x81]: Audio: ac3, 48000 Hz, 5.1(side), fltp, 448 kb/s
+//Stream #0:4[0x82]: Audio: ac3, 48000 Hz, 5.1(side), fltp, 448 kb/s
+function getAudioStreams(filePath) {
+
+    return bluebird.try(() => {
+    console.log('getAudioStreams', filePath);
+
+    return getFfmpegPath()
+      .then(ffmpegPath => path.join(path.dirname(ffmpegPath), getWithExt('ffprobe')))
+      .then(ffprobePath => execa(ffprobePath, [
+        filePath,
+      ]))
+      .then((result) => {
+        var matches =  result.stderr.match(/^\s+Stream\s?#\d:\d\s?(.+\s?:\s?Audio:.+)$/gm);
+        console.log( matches);
+          return matches;
+        //return matches.slice(1);
+      });
+  });
+}
+
+
 
 //ffprobe -of json -show_format -i gladbeck.mp4
 //"format": {
@@ -430,6 +457,7 @@ module.exports = {
   getFormat,
   isCodecOk,
   getDuration,
+  getAudioStreams,
   showFfmpegFail,
   html5ify,
   convert

@@ -118,7 +118,9 @@ class App extends React.Component {
       stripAudio: false,
       scenes: [],
       selectedKey: -1,
-      updateSceneEnabled: false
+      updateSceneEnabled: false,
+      audios: [],
+      selectedAudio:0
     };
 
     this.state = _.cloneDeep(defaultState);
@@ -146,11 +148,17 @@ class App extends React.Component {
 
       this.setState({ working: true });
 
-      return ffmpeg.getFormat(filePath)
-        .then((fileFormat) => {
-          if (!fileFormat) return alert('Unsupported file');
-          setFileNameTitle(filePath);
-          return this.setState({ filePath, html5FriendlyPath, fileFormat });
+        return ffmpeg.getFormat(filePath)
+            .then((fileFormat) => {
+                if (!fileFormat) return alert('Unsupported file');
+                setFileNameTitle(filePath);
+
+                ffmpeg.getAudioStreams(filePath).then((audios) => {
+                    this.setState({ audios: audios });
+
+                    return this.setState({ filePath, html5FriendlyPath, fileFormat });
+                }
+            )
         })
         .catch((err) => {
           if (err.code === 1 || err.code === 'ENOENT') {
@@ -596,7 +604,8 @@ class App extends React.Component {
           return await ffmpeg.extractAudio(
               this.state.filePath,             
               this.state.duration,      
-              progress => this.onCutProgress(progress)
+              progress => this.onCutProgress(progress),
+              this.state.selectedAudio
           );
       } catch (err) {
           console.error('stdout:', err.stdout);
@@ -919,6 +928,13 @@ class App extends React.Component {
                 aria-hidden="true"
                 onClick={() => this.randomScenes()}
             />
+            <select className="selectAudioStream" value={this.state.selectedAudio} onChange={(e) => this.setState({ selectedAudio: e.target.value }) }>
+            {
+                this.state.audios.map(function (item, idx) {
+                        return <option key={idx} value={idx }>{item}</option>;
+                })
+            }
+        </select>
       </div>
 
       <div className="right-menu">

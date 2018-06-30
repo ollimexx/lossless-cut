@@ -40,6 +40,7 @@
     <Content Include="src\index.html" />
     <Content Include="src\main.css" />
     <Content Include="src\icon.svg" />
+    <Compile Include="code\scrubber.js" />
     <Compile Include="src\capture-frame.js" />
     <Compile Include="src\ffmpeg.js" />
     <Compile Include="src\Sequencer.jsx" />
@@ -54,6 +55,7 @@
     <Content Include="src\font-awesome-4.6.3\fonts\fontawesome-webfont.svg" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="code\" />
     <Folder Include="scripts" />
     <Folder Include="scripts\ffmpeg-dl" />
     <Folder Include="src" />

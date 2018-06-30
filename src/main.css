@@ -99,6 +99,10 @@ input, button, textarea, :focus {
     filter: alpha(opacity = 60); /* MSIE */
 }
 
+.selectAudioStream{
+    width:4rem;
+}
+
 .controls-wrapper {
   position: absolute;
   left: 0;
