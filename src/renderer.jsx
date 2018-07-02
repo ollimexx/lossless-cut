@@ -605,7 +605,8 @@ class App extends React.Component {
               this.state.filePath,             
               this.state.duration,      
               progress => this.onCutProgress(progress),
-              this.state.selectedAudio
+              this.state.selectedAudio,
+              this.state.audios[this.state.selectedAudio].indexOf('5.1') != -1
           );
       } catch (err) {
           console.error('stdout:', err.stdout);

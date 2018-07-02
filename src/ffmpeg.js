@@ -79,13 +79,64 @@ function handleProgressOtherTasks(process, cutDuration, onProgress) {
   });
 }
 
-async function extractAudio( filePath,  duration,   onProgress, selectedAudio){
+async function extractAudio( filePath,  duration,   onProgress, selectedAudio, dts){
+
     console.log('selected', selectedAudio); // number of audio stream 0:a:n
 
     var outPath = path.dirname(filePath) + '\\' +  path.parse(filePath).name + '.wav' ;
-
     var args = ['-i', filePath, outPath];
+
+       //ffmpeg -y -i VTS_01_1.VOB -filter_complex "[0:a:2]channelsplit=channel_layout=5.1[FL][FR][FC][LFE][BL][BR];[FL][FR]amerge=inputs=2[front];[BL][BR]amerge=inputs=2[back];[LFE]anullsink" -map "[front]" front.wav -map "[back]" back.wav -map "[FC]" center.wav
+    //if (path.parse(filePath).ext.toUpperCase() === '.VOB') {
+    //    args=['-y', '-i', filePath, '-filter_complex', '"[0:a:' + selectedAudio + ']channelsplit=channel_layout=5.1[FL][FR][FC][LFE][BL][BR];[FL][FR]amerge=inputs=2[front];[BL][BR]amerge=inputs=2[back];[LFE]anullsink"'
+    //        , '-map' ,'"[front]"',  'front.wav',  '-map',  '"[back]"', 'back.wav', '-map', '"[FC]"' ,'center.wav'];
+    //}
+    if (path.parse(filePath).ext.toUpperCase() === '.VOB') {
+        var dir = path.dirname(filePath);
+        var fileName = path.basename(filePath);
+        var files = fs.readdirSync(dir);
+        var relatedFiles=[];
+        console.log( fileName);
+        var matches = fileName.match(/VTS_(\d\d)_\d\.VOB/);
+        var matchNum ="";
+        if (matches && matches.length > 1) {
+            matchNum= matches[1];
+        }
+        console.log( 'matchnum' , matchNum);
+        if (matchNum) {
+            var regExp = new RegExp("VTS_"+ matchNum + "_\\d\.VOB");
+            console.log( 'regexp', regExp);
+            for (var i = 0; i < files.length; i++) {
+                // VTS_01_1.VOB
+                
+                if ( regExp.test( files[i])) {
+                    relatedFiles.push( files[i]);
+                }
+            }
+        }
+        var input = filePath;
+        if (relatedFiles.length > 1) {
+            // -i "concat:VTS_01_1.VOB|VTS_01_2.VOB|VTS_01_3.VOB|VTS_01_4.VOB"
+            input = 'concat:';
+            for (var i = 0; i < relatedFiles.length; i++) {
+                input += dir+'\\' + relatedFiles[i];
+                if (i < relatedFiles.length - 1) {
+                    input+= '|';
+                }
+            }
+        }
+        console.log( 'input: ', input);
+        if (dts) {
+            args = ['-y', '-i', input, '-filter_complex', '[0:a:' + selectedAudio + ']channelsplit=channel_layout=5.1[FL][FR][FC][LFE][BL][BR];[FL][FR]amerge=inputs=2[front];[BL][BR]amerge=inputs=2[back];[LFE]anullsink'
+                , '-map', '[front]', filePath + '-front.wav', '-map', '[back]', filePath + '-back.wav', '-map', '[FC]', filePath + '-center.wav'];
+        }
+        else {
+            args = ['-y', '-i', input, '-map', '0:a:' + selectedAudio, filePath + '.wav'];
+        }
+    }
+
     const ffmpegPath = await getFfmpegPath();
+    console.log( args.join(" "));
     const process = execa(ffmpegPath, args);
     // size=  972876kB time=01:26:28.67 bitrate=1536.0kbits/s speed= 687x
     handleProgressOtherTasks(process, duration, onProgress);
@@ -375,9 +426,15 @@ function getAudioStreams(filePath) {
         filePath,
       ]))
       .then((result) => {
-        var matches =  result.stderr.match(/^\s+Stream\s?#\d:\d\s?(.+\s?:\s?Audio:.+)$/gm);
+        var re = /^\s+Stream\s?#\d:\d\s?(.+)\s?:\s?Audio:\s?(.+)$/gm
+        var matches =  [];
+        var match;
+        while (match = re.exec(result.stderr)) {
+            console.log( match);
+            matches.push( match[1] + ' ' + match[2]);
+        }
         console.log( matches);
-          return matches;
+        return matches;
         //return matches.slice(1);
       });
   });
