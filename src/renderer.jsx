@@ -70,6 +70,16 @@ function renderHelpSheet(visible) {
         <li><kbd>E</kbd> Cut (export selection in the same directory)</li>
         <li><kbd>C</kbd> Capture snapshot (in the same directory)</li>
       </ul>
+      <h1>Sequencer</h1>
+        <ul>
+            <li>use cart button to generate scene from currently selected start and end point</li>
+            <li>use cart arrow button to update start- and end point of currently selected scene</li>
+            <li>drag and drop scenes to change their chronology</li>
+            <li>double-click scene to see their start and end point</li>
+            <li>right click scene to delete it</li>
+            <li>click movie button to export movie of scenes in sequencer</li>
+        </ul>
+
     </div>);
   }
 
@@ -118,7 +128,8 @@ class App extends React.Component {
       stripAudio: false,
       scenes: [],
       selectedKey: -1,
-      updateSceneEnabled: false
+      updateSceneEnabled: false,
+      cutOnKeyframes: true
     };
 
     this.state = _.cloneDeep(defaultState);
@@ -167,8 +178,11 @@ class App extends React.Component {
           var filePath = this.state.filePath + '.prj';
           fs.writeFile(filePath, JSON.stringify(this.state.scenes), 'utf-8', function (err) {
               if (err) throw err
-              console.log('project file written')
+              
+              console.log('project file written');
+          alert( 'project file written to ' + filePath);
           });
+          
       };
     
       const loadProject = (filePath) => {
@@ -616,6 +630,11 @@ class App extends React.Component {
   async mergeClick() {
       if (this.state.working) return alert('I\'m busy');
 
+      if (this.state.scenes.length < 2) {
+          alert( 'create more than one scenes to make a movie!');
+          return;
+      }
+
       const stripAudio = this.state.stripAudio;
 
       this.setState({ working: true });
@@ -627,14 +646,15 @@ class App extends React.Component {
               scenes: this.state.scenes,
               videoDuration: this.state.duration,      
               onProgress: progress => this.onCutProgress(progress),
-              stripAudio
+              stripAudio,
+              cutOnKeyframes:this.state.cutOnKeyframes
           });
       } catch (err) {
           console.error('stdout:', err.stdout);
           console.error('stderr:', err.stderr);
 
           if (err.code === 1 || err.code === 'ENOENT') {
-              return alert('Whoops! ffmpeg was unable to cut this video. It may be of an unknown format or codec combination');
+              return alert('Whoops! ffmpeg was unable to create this video. mybe there is a problem with formats or files');
           }
           return ffmpeg.showFfmpegFail(err);
       } finally {
@@ -668,18 +688,34 @@ class App extends React.Component {
     var ref = { outPath: "" };
 
     try {
-      return await ffmpeg.cutOnIframe({
-        customOutDir: outputDir,
-        filePath,
-        format: fileFormat,
-        cutFrom: cutStartTime,
-        cutTo: cutEndTime,
-        videoDuration,
-        rotation,
-        includeAllStreams,
-        stripAudio,
-        onProgress: progress => this.onCutProgress(progress),
-      }, ref);
+        if (this.state.cutOnKeyframes) {
+            return await ffmpeg.cutOnIframe({
+                customOutDir: outputDir,
+                filePath,
+                format: fileFormat,
+                cutFrom: cutStartTime,
+                cutTo: cutEndTime,
+                videoDuration,
+                rotation,
+                includeAllStreams,
+                stripAudio,
+                onProgress: progress => this.onCutProgress(progress),
+            }, ref);
+        }
+        else {
+            return await ffmpeg.cut({
+                customOutDir: outputDir,
+                filePath,
+                format: fileFormat,
+                cutFrom: cutStartTime,
+                cutTo: cutEndTime,
+                videoDuration,
+                rotation,
+                includeAllStreams,
+                stripAudio,
+                onProgress: progress => this.onCutProgress(progress),
+            }, ref);
+        }
     } catch (err) {
       console.error('stdout:', err.stdout);
       console.error('stderr:', err.stderr);
@@ -902,11 +938,12 @@ class App extends React.Component {
         </button>
             
             <i
-                title="export"
+                title="render movie from scenes"
                 className="button fa fa-film"
                 aria-hidden="true"
                 onClick={() => this.mergeClick()}
             />
+            {/*
             <i
                 title="extract audio"
                 className="button fa fa-headphones"
@@ -918,7 +955,7 @@ class App extends React.Component {
                 className="button fa fa-paper-plane"
                 aria-hidden="true"
                 onClick={() => this.randomScenes()}
-            />
+            />*/}
       </div>
 
       <div className="right-menu">
@@ -934,6 +971,13 @@ class App extends React.Component {
           onClick={withBlur(() => this.setState({ stripAudio: !this.state.stripAudio }))}
         >
           {this.state.stripAudio ? 'da' : 'ka'}
+        </button>
+
+        <button
+          title={`Cut on Keyframes? Current: ${this.state.cutOnKeyframes ? 'cut on keyframes' : "cut on exact position - video may have empty portion"}`}
+          onClick={withBlur(() => this.setState({ cutOnKeyframes: !this.state.cutOnKeyframes }))}
+        >
+          {this.state.cutOnKeyframes ? 'ck' : 'ce'}
         </button>
 
         <button

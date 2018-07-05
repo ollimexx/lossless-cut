@@ -92,7 +92,7 @@ async function extractAudio( filePath,  duration,   onProgress){
 }
 
 async function merge({
-    customOutDir, filePath, format, scenes, videoDuration, onProgress,stripAudio
+    customOutDir, filePath, format, scenes, videoDuration, onProgress,stripAudio, cutOnKeyframes
 }) {
     onProgress(0);
 
@@ -117,10 +117,18 @@ async function merge({
 
     for (var i = 0; i < scenes.length; i++) {
         var scene = scenes[i];
-        var ret= await cutOnIframe({
-            customOutDir:subDir, filePath, format, cutFrom: scene.left, cutTo:scene.right, videoDuration,
-            rotation: undefined, includeAllStreams: false, onProgress: function (p) { },stripAudio
-        }, ref);
+        if (cutOnKeyframes) {
+            var ret = await cutOnIframe({
+                customOutDir: subDir, filePath, format, cutFrom: scene.left, cutTo: scene.right, videoDuration,
+                rotation: undefined, includeAllStreams: false, onProgress: function (p) { }, stripAudio
+            }, ref);
+        }
+        else {
+            var ret = await cut({
+                customOutDir: subDir, filePath, format, cutFrom: scene.left, cutTo: scene.right, videoDuration,
+                rotation: undefined, includeAllStreams: false, onProgress: function (p) { }, stripAudio
+            }, ref);
+        }
         stream.write(`file '${ref.outPath}'\r\n`);
 
         onProgress( (i+2) / (scenes.length + 2))
@@ -131,8 +139,13 @@ async function merge({
     var args = ['-y', '-f', 'concat', '-safe', '0', '-i', fileListPath, '-c', 'copy', mergeFilePath];
     const ffmpegPath = await getFfmpegPath();
     const process = execa(ffmpegPath, args);
+    process.on('exit', function (code) {
+        console.log('exit');
+        alert( 'saved video to ' + mergeFilePath);
+    });
     const result = await process;
     console.log(result.stdout);
+    
     //onProgress(i / scenes.length);
 }
 
