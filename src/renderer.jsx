@@ -781,9 +781,19 @@ class App extends React.Component {
           onDurationChange={e => this.onDurationChange(e.target.duration)}
           onTimeUpdate={e => this.setState({ currentTime: e.target.currentTime })}
         />
-        </div>
-
-           
+      </div>
+      <div className="audio">
+            {/*src="http://shouthost.com.17.streams.bassdrive.com:8200/;" http://yp.shoutcast.com/sbin/tunein-station.m3u?id=1425714*/}
+            {/* #EXTM3U
+                #EXTINF:-1,(#1 - 110/300) !Radioparty.pl - Vocal Trance, Electronic, Dance
+                http://176.31.240.87:8025*/}
+        <audio
+          src="http://176.31.240.87:8025/;"      
+          type="audio/mpeg"
+          controls
+        />
+       </div>
+        
         <Sequencer onRef={ref => (this.sequencer = ref)} entries={this.state.scenes} selectedKey={this.state.selectedKey}
             delete={this.deleteScene} onDoubleClick={this.onSceneDoubleClick} onDrop={this.onSceneDrop}/>
 
@@ -923,12 +933,13 @@ class App extends React.Component {
                 aria-hidden="true"
                 onClick={() => this.extractAudioClick()}
             />
+            {/*
             <i
                 title="random"
                 className="button fa fa-paper-plane"
                 aria-hidden="true"
                 onClick={() => this.randomScenes()}
-            />
+            />*/}
             <select className="selectAudioStream" value={this.state.selectedAudio} onChange={(e) => this.setState({ selectedAudio: e.target.value }) }>
             {
                 this.state.audios.map(function (item, idx) {
